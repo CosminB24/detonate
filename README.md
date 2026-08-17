@@ -55,10 +55,6 @@ validating the collection layer — proving the sandbox produces enough signal t
 separate a clean install from a malicious one before any of the above gets built
 on top of it.
 
-The [event schema](schema/event-v1.json) is the piece that carries forward, and
-it is already defined. Progress is tracked in [`NEXT.md`](NEXT.md); the longer
-arc lives in [`VISION.md`](VISION.md).
-
 ## Running the current experiment
 
 ```bash
