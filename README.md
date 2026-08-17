@@ -1,39 +1,65 @@
-# detonate
+<h1 align="center">detonate</h1>
 
-**See what an npm package actually does when you install it.**
+<p align="center">
+  <strong>See what an npm package actually does when you install it.</strong>
+</p>
 
-Runs an untrusted package in a disposable sandbox, records what it touches -
-processes, files, network, credentials - and reports evidence instead of a guess.
+<p align="center">
+  Runs untrusted code in a disposable sandbox, watches every move it makes,<br>
+  and hands you evidence instead of a guess.
+</p>
 
 ---
 
-## Status: work in progress
+## The problem
 
-No CLI, no release, nothing usable yet. This is a spike answering one question
-before any real code gets written:
+`npm install` executes arbitrary code on your machine. That has always been true,
+and it is how most supply chain attacks land — a compromised maintainer publishes
+a new version, an install hook fires, and credentials leave your laptop or your
+CI runner before anyone notices.
 
-> **Does `strace` over `npm install` produce enough signal to tell a clean
-> package from a malicious one, without drowning in noise?**
+Reading the code rarely helps. Install scripts are minified, obfuscated, or just
+downloaders that fetch the real payload at runtime. Static scanners tell you what
+a package *looks* like. They cannot tell you what it *does*.
 
-Yes, and Phase 1 builds the CLI in Go. No, and the collector changes first.
+So run it somewhere it cannot hurt you, and watch.
 
-## Right now: sessions 1-2
+## What detonate does
 
-**Session 1 - produce the traces.**
-Build a container with Node and `strace`, run a known-good package
-(`lodash`, zero dependencies) and a synthetic malicious fixture, capture both.
-Done when `out/clean.log` and `out/evil.log` exist and aren't empty.
+```console
+$ detonate npm some-package@1.2.3
 
-**Session 2 - measure the noise floor.**
-Read `out/clean.log` by hand. No parser, no code. How many processes? Which
-`execve` calls, and why? How many writes land outside the working directory?
-How much is pure `stat` noise over `node_modules`? Answers go in `spike/NOTES.md`.
+  VERDICT   malicious                                        score 87/100
 
-That second session is the actual deliverable. Everything downstream - which
-syscalls to trace, which rules are worth writing - depends on knowing how loud
-a clean install already is.
+  FINDINGS
+  ● HIGH      Read SSH private key                          T1552.004
+              /root/.ssh/id_rsa   ← postinstall.js:12
+  ● HIGH      Install script contacted external host        T1041
+              203.0.113.7:443     ← blocked, no egress
+  ● MEDIUM    Modified shell startup file                   T1546.004
+              /root/.bashrc
 
-## Run it
+  COVERAGE  install script ✓   module import ✓   exports ✗   network sinkholed
+
+  4.1s · 218 events · report: ./detonate-report.json
+```
+
+Every finding points at a real recorded event. Nothing is inferred from the
+source, and nothing is guessed.
+
+
+## Status
+
+Early, and honest about it: there is no CLI to install yet. The work right now is
+validating the collection layer — proving the sandbox produces enough signal to
+separate a clean install from a malicious one before any of the above gets built
+on top of it.
+
+The [event schema](schema/event-v1.json) is the piece that carries forward, and
+it is already defined. Progress is tracked in [`NEXT.md`](NEXT.md); the longer
+arc lives in [`VISION.md`](VISION.md).
+
+## Running the current experiment
 
 ```bash
 cd spike
@@ -41,20 +67,13 @@ docker build -t detonate-spike .
 ./run.sh
 ```
 
-Both runs are fully offline (`--network=none`); the baseline package is fetched
-at image build time.
+Produces two traces in `out/` — one from a known-good package, one from a
+synthetic fixture that simulates credential theft. Both run fully offline.
 
-## Safety
-
-`--cap-add=SYS_PTRACE` and `seccomp=unconfined` are needed for tracing and both
-weaken container isolation. **Not a security boundary.** Everything in
-`spike/testdata/` is synthetic and harmless by construction. Never commit real
-malware samples here. See [`SECURITY.md`](SECURITY.md).
-
-## More
-
-Plan: [`docs/PHASE-0.md`](docs/PHASE-0.md) · Current state: [`NEXT.md`](NEXT.md) ·
-Long-term intent: [`VISION.md`](VISION.md) · Event model: [`schema/event-v1.json`](schema/event-v1.json)
+> **A note on isolation.** Tracing requires `SYS_PTRACE` and a relaxed seccomp
+> profile, which weakens container isolation. Treat the current sandbox as a
+> research tool, not a containment boundary. Every test fixture in this repo is
+> hand-written and harmless — no real malware samples, ever.
 
 ## License
 
