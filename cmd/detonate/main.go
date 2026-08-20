@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 )
 
 func main() {
@@ -20,4 +21,14 @@ func main() {
 
 	fmt.Printf("%-10s %s\n", "ecosystem:", os.Args[1])
 	fmt.Printf("%-10s %s\n", "target:", os.Args[2])
+
+	command := exec.Command("docker", "--version")
+
+	result, err := command.Output()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	fmt.Println(string(result))
 }
