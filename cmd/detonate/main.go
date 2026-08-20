@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 func main() {
@@ -22,13 +23,34 @@ func main() {
 	fmt.Printf("%-10s %s\n", "ecosystem:", os.Args[1])
 	fmt.Printf("%-10s %s\n", "target:", os.Args[2])
 
-	command := exec.Command("docker", "--version")
-
-	result, err := command.Output()
+	wd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	fmt.Println(string(result))
+	outPath := filepath.Join(wd, "out")
+
+	if err = os.MkdirAll(outPath, 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	command := exec.Command("docker", "run", "--rm", "--network=none", "--cap-add=SYS_PTRACE",
+		"--security-opt", "seccomp=unconfined", "-v", outPath+":/out",
+		"detonate-spike",
+		"strace", "-f", "-tt", "-y", "-s", "512",
+		"-e", "trace=%process,%file,%network",
+		"-o", "/out/clean.log",
+		"npm", "install", "--offline", "--no-audit", "--no-fund", "--no-save",
+		"--ignore-scripts", "/fixtures/lodash-4.17.21.tgz")
+
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+
+	err = command.Run()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
