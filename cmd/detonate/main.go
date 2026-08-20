@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 func main() {
@@ -20,10 +21,22 @@ func main() {
 
 	ecosystem := os.Args[1]
 	target := os.Args[2]
+
+	// If the target is a local path, resolve it to an absolute path so it can
+	// be mounted into the container regardless of the current directory.
+	isLocalPath := strings.HasPrefix(target, ".") || strings.HasPrefix(target, "/")
+	if isLocalPath {
+		abs, err := filepath.Abs(target)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		target = abs
+	}
+
 	fmt.Printf("%-12s %s\n", "ecosystem:", ecosystem)
 	fmt.Printf("%-12s %s\n", "target:", target)
 
-	// Working directories on the host.
 	wd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -34,44 +47,64 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	workPath := filepath.Join(outPath, "work")
-	if err := os.MkdirAll(workPath, 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 
-	// PHASE A — download the package AND its full dependency tree on the host.
-	// --ignore-scripts is the safety boundary: npm fetches every file but runs
-	// no code, so nothing untrusted executes on the host. Needs network.
-	install := exec.Command("npm", "install", target,
-		"--ignore-scripts", "--no-audit", "--no-fund")
-	install.Dir = workPath
-	install.Stdout = os.Stdout
-	install.Stderr = os.Stderr
-	if err := install.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	fmt.Printf("%-12s %s\n", "installed:", workPath)
+	// Determine what to mount into the container and how npm will refer to it.
+	//
+	// LOCAL PATH  (e.g. ./spike/testdata/evil-pkg): mount the package folder at
+	//   /pkg and install from there. Works for dependency-free packages.
+	//
+	// NAMED PACKAGE (e.g. lodash@4.17.21): fetch the tarball on the host with
+	//   npm pack (network is safe: nothing executes), mount the folder holding
+	//   it, and install that tarball offline in the container.
+	//
+	// NOTE: packages WITH dependencies are not handled yet — offline install in
+	// the container has no cache for them. Tracked as a separate design task.
+	var mountSource string // host path to mount
+	var installArg string  // what npm installs, as seen inside the container
 
-	// PHASE B — detonate inside the offline container. Reactivated next step.
-	/*
-		command := exec.Command("docker", "run", "--rm",
-			"--network=none",
-			"--cap-add=SYS_PTRACE",
-			"--security-opt", "seccomp=unconfined",
-			"-v", outPath+":/out",
-			"-v", workPath+":/work:ro",
-			"detonate-spike",
-			"strace", "-f", "-tt", "-y", "-s", "512",
-			"-e", "trace=%process,%file,%network",
-			"-o", "/out/clean.log",
-			"npm", "install", "--offline", "--no-audit", "--no-fund", "--no-save")
-		command.Stdout = os.Stdout
-		command.Stderr = os.Stderr
-		if err := command.Run(); err != nil {
+	if isLocalPath {
+		mountSource = target
+		installArg = "/pkg"
+	} else {
+		pkgPath := filepath.Join(outPath, "pkg")
+		if err := os.MkdirAll(pkgPath, 0o755); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-	*/
+		pack := exec.Command("npm", "pack", target, "--pack-destination", pkgPath)
+		out, err := pack.Output()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fileName := strings.TrimSpace(string(out))
+		fmt.Printf("%-12s %s\n", "downloaded:", filepath.Join(pkgPath, fileName))
+		mountSource = pkgPath
+		installArg = "/pkg/" + fileName
+	}
+
+	// Detonate inside the offline container. strace records every process,
+	// file and network syscall to /out/trace.log. Install scripts run
+	// (--foreground-scripts) so their behaviour is captured.
+	logName := "trace.log"
+	command := exec.Command("docker", "run", "--rm",
+		"--network=none",
+		"--cap-add=SYS_PTRACE",
+		"--security-opt", "seccomp=unconfined",
+		"-v", outPath+":/out",
+		"-v", mountSource+":/pkg:ro",
+		"detonate-spike",
+		"strace", "-f", "-tt", "-y", "-s", "512",
+		"-e", "trace=%process,%file,%network",
+		"-o", "/out/"+logName,
+		"npm", "install", "--offline", "--no-audit", "--no-fund",
+		"--foreground-scripts", installArg)
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	if err := command.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("%-12s %s\n", "trace:", filepath.Join(outPath, logName))
 }
