@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 func main() {
@@ -35,6 +36,26 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+
+	pkgPath := filepath.Join(outPath, "pkg")
+
+	if err = os.MkdirAll(pkgPath, 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	npmPack := exec.Command("npm", "pack", os.Args[2], "--pack-destination", pkgPath)
+
+	out, err := npmPack.Output()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	fileName := strings.TrimSpace(string(out))
+
+	file := filepath.Join(pkgPath, fileName)
+	fmt.Printf("%-10s %s\n", "downloaded:", file)
 
 	command := exec.Command("docker", "run", "--rm", "--network=none", "--cap-add=SYS_PTRACE",
 		"--security-opt", "seccomp=unconfined", "-v", outPath+":/out",
