@@ -7,7 +7,7 @@ OUT_DIR="$(cd .. && pwd)/out"
 mkdir -p "$OUT_DIR"
 
 docker run \
-  --rm \ 
+  --rm \
   --network=none \
   --cap-add=SYS_PTRACE \
   --security-opt seccomp=unconfined \
