@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/CosminB24/detonate/internal/collect"
+	"github.com/CosminB24/detonate/internal/runner"
 )
 
 func main() {
@@ -89,21 +90,7 @@ func main() {
 	// file and network syscall to /out/trace.log. Install scripts run
 	// (--foreground-scripts) so their behaviour is captured.
 	logName := "trace.log"
-	command := exec.Command("docker", "run", "--rm",
-		"--network=none",
-		"--cap-add=SYS_PTRACE",
-		"--security-opt", "seccomp=unconfined",
-		"-v", outPath+":/out",
-		"-v", mountSource+":/pkg:ro",
-		"detonate-spike",
-		"strace", "-f", "-tt", "-y", "-s", "512",
-		"-e", "trace=%process,%file,%network",
-		"-o", "/out/"+logName,
-		"npm", "install", "--offline", "--no-audit", "--no-fund",
-		"--foreground-scripts", installArg)
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-	if err := command.Run(); err != nil {
+	if err := runner.Detonate(outPath, mountSource, installArg, logName); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
