@@ -6,12 +6,26 @@ import (
 	"strings"
 )
 
+var syscallKinds = map[string]string{
+	"execve":     "process.exec",
+	"clone":      "process.create",
+	"connect":    "net.connect",
+	"socket":     "net.socket",
+	"sendto":     "net.send",
+	"unlink":     "file.delete",
+	"mkdir":      "file.mkdir",
+	"statx":      "file.stat",
+	"newfstatat": "file.stat",
+	"access":     "file.stat",
+}
+
 type Event struct {
 	Seq int
 	PID string
 	TS string
 	Syscall string
 	Raw string
+	Kind string
 }
 
 func Parse(path string) ([]Event, int, error) {
@@ -46,8 +60,27 @@ func Parse(path string) ([]Event, int, error) {
 			TS:      fields[1],
 			Syscall: name,
 			Raw:     line,
+			Kind:	 classify(name, line),
 		})
 	}
 
 	return events, skipped, scanner.Err()
+}
+
+func classify(syscall, raw string) string {
+	if syscall == "openat" || syscall == "open" {
+		if strings.Contains(raw, "O_WRONLY") ||
+			strings.Contains(raw, "O_RDWR") ||
+			strings.Contains(raw, "O_CREAT") ||
+			strings.Contains(raw, "O_APPEND") {
+			return "file.write"
+		}
+		return "file.read"
+	}
+
+	if kind, ok := syscallKinds[syscall]; ok {
+		return kind
+	}
+
+	return "other"
 }

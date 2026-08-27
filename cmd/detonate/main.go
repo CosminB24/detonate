@@ -106,4 +106,14 @@ func main() {
 
 	fmt.Printf("%-12s %d\n", "events:", len(events))
 	fmt.Printf("%-12s %d\n", "skipped:", skipped)
+
+	counts := map[string]int{}
+	for _, e := range events {
+		counts[e.Kind]++
+	}
+
+	fmt.Println()
+	for kind, n := range counts {
+		fmt.Printf("%-16s %d\n", kind, n)
+	}
 }
