@@ -9,6 +9,7 @@ import (
 
 	"github.com/CosminB24/detonate/internal/collect"
 	"github.com/CosminB24/detonate/internal/runner"
+	"github.com/CosminB24/detonate/internal/signature"
 )
 
 func main() {
@@ -117,10 +118,19 @@ func main() {
 		fmt.Printf("%-16s %d\n", kind, n)
 	}
 
+	findings := signature.Match(events)
+
 	fmt.Println()
-	for _, e := range events {
-		if e.Kind == "process.exec" || e.Kind == "net.connect" || e.Kind == "file.write" {
-			fmt.Printf("%-16s %s\n", e.Kind, e.Target)
-		}
+	if len(findings) == 0 {
+		fmt.Println("no findings")
 	}
+	for _, f := range findings {
+		fmt.Printf("[%s] %s (%d events)\n", f.Severity, f.Title, len(f.Evidence))
+	}
+	// fmt.Println()
+	// for _, e := range events {
+	// 	if e.Kind == "process.exec" || e.Kind == "net.connect" || e.Kind == "file.write" {
+	// 		fmt.Printf("%-16s %s\n", e.Kind, e.Target)
+	// 	}
+	// }
 }
