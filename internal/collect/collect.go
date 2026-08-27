@@ -42,6 +42,7 @@ type Event struct {
 	Raw string
 	Kind string
 	Target string
+	Failed bool
 }
 
 func Parse(path string) ([]Event, int, error) {
@@ -81,6 +82,7 @@ func Parse(path string) ([]Event, int, error) {
 			Raw:     line,
 			Kind:	 kind,
 			Target: target,
+			Failed: failed(line),
 		})
 	}
 
@@ -113,4 +115,8 @@ func extractTarget (kind, raw string) string {
 	}
 	
 	return parts[1]
+}
+
+func failed(raw string) bool {
+	return strings.Contains(raw, "= -1")
 }

@@ -56,6 +56,10 @@ func Match(events []collect.Event) []Finding {
 		var evidence []int
 
 		for _, e := range events {
+			if e.Failed {
+				continue
+			}
+
 			if e.Kind != rule.Kind {
 				continue
 			}
