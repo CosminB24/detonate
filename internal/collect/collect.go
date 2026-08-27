@@ -17,6 +17,21 @@ var syscallKinds = map[string]string{
 	"statx":      "file.stat",
 	"newfstatat": "file.stat",
 	"access":     "file.stat",
+	"clone3":     "process.create",
+	"vfork":      "process.create",
+	"fork":       "process.create",
+	"exit":       "process.exit",
+	"exit_group": "process.exit",
+	"wait4":      "process.wait",
+	"readlink":   "file.stat",
+	"getcwd":     "file.stat",
+	"rmdir":      "file.delete",
+	"recvmsg":    "net.recv",
+	"shutdown":   "net.close",
+	"socketpair": "net.socket",
+	"setsockopt":  "net.socket",
+	"getsockname": "net.socket",
+	"getsockopt":  "net.socket",
 }
 
 type Event struct {
@@ -26,6 +41,7 @@ type Event struct {
 	Syscall string
 	Raw string
 	Kind string
+	Target string
 }
 
 func Parse(path string) ([]Event, int, error) {
@@ -54,13 +70,17 @@ func Parse(path string) ([]Event, int, error) {
 			continue
 		}
 
+		kind := classify(name, line)
+		target := extractTarget(kind, line)
+
 		events = append(events, Event{
 			Seq:     len(events) + 1,
 			PID:     fields[0],
 			TS:      fields[1],
 			Syscall: name,
 			Raw:     line,
-			Kind:	 classify(name, line),
+			Kind:	 kind,
+			Target: target,
 		})
 	}
 
@@ -83,4 +103,14 @@ func classify(syscall, raw string) string {
 	}
 
 	return "other"
+}
+
+func extractTarget (kind, raw string) string {
+	parts := strings.Split(raw, "\"")
+
+	if len(parts) < 2 {
+		return ""
+	}
+	
+	return parts[1]
 }

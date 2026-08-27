@@ -116,4 +116,11 @@ func main() {
 	for kind, n := range counts {
 		fmt.Printf("%-16s %d\n", kind, n)
 	}
+
+	fmt.Println()
+	for _, e := range events {
+		if e.Kind == "process.exec" || e.Kind == "net.connect" || e.Kind == "file.write" {
+			fmt.Printf("%-16s %s\n", e.Kind, e.Target)
+		}
+	}
 }
