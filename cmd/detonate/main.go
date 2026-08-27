@@ -1,12 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/CosminB24/detonate/internal/collect"
 )
 
 func main() {
@@ -107,45 +108,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("%-12s %s\n", "trace:", filepath.Join(outPath, logName))
-
 	tracePath := filepath.Join(outPath, logName)
+	fmt.Printf("%-12s %s\n", "trace:", tracePath)
 
-	file, err := os.Open(tracePath)
+	events, skipped, err := collect.Parse(tracePath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	count := 0
-	skipped := 0
-	parsed := 0
-	for scanner.Scan() {
-		line := scanner.Text()
-		count++
-
-		fields := strings.Fields(line)
-
-		if len(fields) < 3 {
-			skipped++
-			continue
-		}
-
-		name, _, found := strings.Cut(fields[2], "(")
-		if !found {
-			skipped++
-			continue
-		}
-		parsed++
-
-		if parsed <= 5 {
-			fmt.Printf("%s | %s | %s\n", fields[0], fields[1], name)
-		}
-	}
-
-	fmt.Printf("%-12s %d\n", "lines:", count)
-	fmt.Printf("%-12s %d\n", "parsed:", parsed)
+	fmt.Printf("%-12s %d\n", "events:", len(events))
 	fmt.Printf("%-12s %d\n", "skipped:", skipped)
 }
