@@ -15,10 +15,10 @@ type Rule struct {
 }
 
 type Finding struct {
-	RuleID   string
-	Title    string
-	Severity string
-	Evidence []int // Seq values of the matching events
+	RuleID   string `json:"rule_id"`
+	Title    string `json:"title"`
+	Severity string `json:"severity"`
+	Evidence []int  `json:"evidence"`
 }
 
 // rules is the built-in rule set. Later phase these move to YAML files

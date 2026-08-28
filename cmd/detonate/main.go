@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/CosminB24/detonate/internal/collect"
 	"github.com/CosminB24/detonate/internal/runner"
@@ -23,6 +24,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Only npm is supported")
 		os.Exit(1)
 	}
+
+	startedAt := time.Now()
 
 	ecosystem := os.Args[1]
 	target := os.Args[2]
@@ -129,11 +132,23 @@ func main() {
 		fmt.Printf("[%s] %s (%d events)\n", f.Severity, f.Title, len(f.Evidence))
 	}
 
+	rep := report.Report{
+	SchemaVersion: "1.0",
+	Analysis: report.Analysis{
+		Ecosystem: ecosystem,
+		Target:    target,
+		StartedAt: startedAt,
+		Verdict:   verdict,
+		Events:    len(events),
+		Skipped:   skipped,
+		Findings:  findings,
+		},
+	}
 
-	// fmt.Println()
-	// for _, e := range events {
-	// 	if e.Kind == "process.exec" || e.Kind == "net.connect" || e.Kind == "file.write" {
-	// 		fmt.Printf("%-16s %s\n", e.Kind, e.Target)
-	// 	}
-	// }
+	reportPath := filepath.Join(outPath, "report.json")
+	if err := report.Write(reportPath, rep); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Printf("\n%-12s %s\n", "report:", reportPath)
 }
