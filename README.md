@@ -48,23 +48,60 @@ Every finding points at a real recorded event. Nothing is inferred from the
 source, and nothing is guessed.
 
 
-## Status
+## Diffing two versions
 
-Early, and honest about it: there is no CLI to install yet. The work right now is
-validating the collection layer — proving the sandbox produces enough signal to
-separate a clean install from a malicious one before any of the above gets built
-on top of it.
+Most supply chain attacks are not a malicious package. They are a *new version*
+of a package you already trust. So the more useful question is not "is this
+dangerous" but "what does this release do that the last one didn't":
 
-## Running the current experiment
+```console
+$ detonate diff npm some-package@1.2.3 some-package@1.2.4
 
-```bash
-cd spike
-docker build -t detonate-spike .
-./run.sh
+  === some-package@1.2.3 → some-package@1.2.4
+
+  from:        inconclusive   23 behaviours
+  to:          malicious      28 behaviours
+
+  NEW (5)
+    file.read        /root/.aws/credentials
+    file.read        /root/.ssh/id_rsa
+    file.write       /root/.bashrc
+    file.write       /tmp/marker
+    process.exec     /bin/sh
+  REMOVED (0)
+  unchanged:   23
+
+  NEW FINDING [high] Read credential file (2 events)
+  NEW FINDING [high] Modified shell startup file (1 events)
 ```
 
-Produces two traces in `out/` — one from a known-good package, one from a
-synthetic fixture that simulates credential theft. Both run fully offline.
+Each version is detonated more than once, and only the behaviours every run
+agreed on are compared — anything that varies between runs of the same version
+is noise, and would otherwise be reported as a change between versions.
+
+Static version diffing exists. Dynamic behavioural diffing, as far as we can
+tell, does not.
+
+## Status
+
+Early, and honest about it. The output above is real, but the coverage behind it
+is narrow: install scripts only, one detonation per run, exported functions never
+invoked. That is why there is no `benign` verdict — with this much coverage, no
+findings is not evidence of safety, so the tool says `inconclusive` instead.
+
+## Running it
+
+```bash
+docker build -t detonate-spike ./spike
+
+go run ./cmd/detonate npm express@5.2.1
+go run ./cmd/detonate npm ./spike/testdata/evil-pkg
+go run ./cmd/detonate diff npm ./testdata/staged-pkg/v1 ./testdata/staged-pkg/v2
+```
+
+Writes a trace and a JSON report to `out/`. The package is downloaded with the
+network on and no code running, then executed with the network off — so the only
+thing that ever touches the internet is the download.
 
 > **A note on isolation.** Tracing requires `SYS_PTRACE` and a relaxed seccomp
 > profile, which weakens container isolation. Treat the current sandbox as a
