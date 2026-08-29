@@ -44,6 +44,7 @@ type Event struct {
 	Target  string
 	Failed  bool
 	Partial bool
+	Result string
 }
 
 func Parse(path string) ([]Event, int, error) {
@@ -72,6 +73,7 @@ func Parse(path string) ([]Event, int, error) {
 			continue
 		}
 
+		res := result(line)
 		kind := classify(name, line)
 		target := extractTarget(kind, line)
 
@@ -80,10 +82,11 @@ func Parse(path string) ([]Event, int, error) {
 			PID:     fields[0],
 			TS:      fields[1],
 			Syscall: name,
-			Raw:     line,
 			Kind:    kind,
 			Target:  target,
-			Failed:  failed(line),
+			Raw:     line,
+			Result:  res,
+			Failed:  failed(res),
 			Partial: partial(line),
 		})
 	}
@@ -119,10 +122,30 @@ func extractTarget(kind, raw string) string {
 	return parts[1]
 }
 
-func failed(raw string) bool {
-	return strings.Contains(raw, "= -1")
+func failed(res string) bool {
+	return strings.HasPrefix(res, "-")
 }
 
 func partial(raw string) bool {
 	return strings.Contains(raw, "<unfinished")
+}
+
+func result(raw string) string {
+	i := strings.LastIndex(raw, "= ")
+	if i < 0 {
+		return ""
+	}
+ 
+	rest := raw[i+2:]
+ 
+	// Cut at the first space: "-1 ENOENT (...)" → "-1"
+	if j := strings.IndexByte(rest, ' '); j >= 0 {
+		rest = rest[:j]
+	}
+	// Cut at "<": "3</etc/passwd>" → "3"
+	if j := strings.IndexByte(rest, '<'); j >= 0 {
+		rest = rest[:j]
+	}
+ 
+	return rest
 }
