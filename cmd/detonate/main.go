@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/CosminB24/detonate/internal/collect"
+	"github.com/CosminB24/detonate/internal/report"
 	"github.com/CosminB24/detonate/internal/runner"
 	"github.com/CosminB24/detonate/internal/signature"
-	"github.com/CosminB24/detonate/internal/report"
 )
 
 func main() {
@@ -26,12 +26,11 @@ func main() {
 	}
 
 	startedAt := time.Now()
-
 	ecosystem := os.Args[1]
 	target := os.Args[2]
 
-	// If the target is a local path, resolve it to an absolute path so it can
-	// be mounted into the container regardless of the current directory.
+	// A local path is resolved to an absolute path so it stays valid no matter
+	// which working directory a subprocess runs in.
 	isLocalPath := strings.HasPrefix(target, ".") || strings.HasPrefix(target, "/")
 	if isLocalPath {
 		abs, err := filepath.Abs(target)
@@ -56,46 +55,43 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Determine what to mount into the container and how npm will refer to it.
-	//
-	// LOCAL PATH  (e.g. ./spike/testdata/evil-pkg): mount the package folder at
-	//   /pkg and install from there. Works for dependency-free packages.
-	//
-	// NAMED PACKAGE (e.g. lodash@4.17.21): fetch the tarball on the host with
-	//   npm pack (network is safe: nothing executes), mount the folder holding
-	//   it, and install that tarball offline in the container.
-	//
-	// NOTE: packages WITH dependencies are not handled yet — offline install in
-	// the container has no cache for them. Tracked as a separate design task.
-	var mountSource string // host path to mount
-	var installArg string  // what npm installs, as seen inside the container
+	// The work directory is shared between the two container phases. Files in
+	// it are created by root inside the container, so it must be removed from
+	// a container too — the host user cannot delete them.
+	workPath := filepath.Join(outPath, "work")
+	if err := runner.Clean(outPath); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(workPath, 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 
+	// What npm will install, as seen from inside the container.
+	//
+	// A named package is passed through untouched — phase 1 downloads it.
+	// A local path is packed into a tarball first: installing a directory
+	// creates a symlink ("file:" dependency), and npm never runs lifecycle
+	// scripts for those. The tarball is written into the work directory
+	// because that is what the container mounts.
+	installArg := target
 	if isLocalPath {
-		mountSource = target
-		installArg = "/pkg"
-	} else {
-		pkgPath := filepath.Join(outPath, "pkg")
-		if err := os.MkdirAll(pkgPath, 0o755); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		pack := exec.Command("npm", "pack", target, "--pack-destination", pkgPath)
+		pack := exec.Command("npm", "pack", target, "--pack-destination", workPath)
 		out, err := pack.Output()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 		fileName := strings.TrimSpace(string(out))
-		fmt.Printf("%-12s %s\n", "downloaded:", filepath.Join(pkgPath, fileName))
-		mountSource = pkgPath
-		installArg = "/pkg/" + fileName
+		installArg = "/work/" + fileName
+		fmt.Printf("%-12s %s\n", "packed:", fileName)
 	}
 
-	// Detonate inside the offline container. strace records every process,
-	// file and network syscall to /out/trace.log. Install scripts run
-	// (--foreground-scripts) so their behaviour is captured.
+	// Two phases: fetch with network but no execution, then execute offline
+	// under strace. See internal/runner.
 	logName := "trace.log"
-	if err := runner.Detonate(outPath, mountSource, installArg, logName); err != nil {
+	if err := runner.Detonate(outPath, workPath, installArg, logName); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -108,7 +104,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-
 	fmt.Printf("%-12s %d\n", "events:", len(events))
 	fmt.Printf("%-12s %d\n", "skipped:", skipped)
 
@@ -116,7 +111,6 @@ func main() {
 	for _, e := range events {
 		counts[e.Kind]++
 	}
-
 	fmt.Println()
 	for kind, n := range counts {
 		fmt.Printf("%-16s %d\n", kind, n)
@@ -128,23 +122,25 @@ func main() {
 	fmt.Println()
 	fmt.Printf("%-12s %s\n", "verdict:", verdict)
 	fmt.Println()
+	if len(findings) == 0 {
+		fmt.Println("no findings")
+	}
 	for _, f := range findings {
 		fmt.Printf("[%s] %s (%d events)\n", f.Severity, f.Title, len(f.Evidence))
 	}
 
 	rep := report.Report{
-	SchemaVersion: "1.0",
-	Analysis: report.Analysis{
-		Ecosystem: ecosystem,
-		Target:    target,
-		StartedAt: startedAt,
-		Verdict:   verdict,
-		Events:    len(events),
-		Skipped:   skipped,
-		Findings:  findings,
+		SchemaVersion: "1.0",
+		Analysis: report.Analysis{
+			Ecosystem: ecosystem,
+			Target:    target,
+			StartedAt: startedAt,
+			Verdict:   verdict,
+			Events:    len(events),
+			Skipped:   skipped,
+			Findings:  findings,
 		},
 	}
-
 	reportPath := filepath.Join(outPath, "report.json")
 	if err := report.Write(reportPath, rep); err != nil {
 		fmt.Fprintln(os.Stderr, err)
