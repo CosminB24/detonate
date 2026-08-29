@@ -7,42 +7,42 @@ import (
 )
 
 var syscallKinds = map[string]string{
-	"execve":     "process.exec",
-	"clone":      "process.create",
-	"connect":    "net.connect",
-	"socket":     "net.socket",
-	"sendto":     "net.send",
-	"unlink":     "file.delete",
-	"mkdir":      "file.mkdir",
-	"statx":      "file.stat",
-	"newfstatat": "file.stat",
-	"access":     "file.stat",
-	"clone3":     "process.create",
-	"vfork":      "process.create",
-	"fork":       "process.create",
-	"exit":       "process.exit",
-	"exit_group": "process.exit",
-	"wait4":      "process.wait",
-	"readlink":   "file.stat",
-	"getcwd":     "file.stat",
-	"rmdir":      "file.delete",
-	"recvmsg":    "net.recv",
-	"shutdown":   "net.close",
-	"socketpair": "net.socket",
+	"execve":      "process.exec",
+	"clone":       "process.create",
+	"connect":     "net.connect",
+	"socket":      "net.socket",
+	"sendto":      "net.send",
+	"unlink":      "file.delete",
+	"mkdir":       "file.mkdir",
+	"statx":       "file.stat",
+	"newfstatat":  "file.stat",
+	"access":      "file.stat",
+	"clone3":      "process.create",
+	"vfork":       "process.create",
+	"fork":        "process.create",
+	"exit":        "process.exit",
+	"exit_group":  "process.exit",
+	"wait4":       "process.wait",
+	"readlink":    "file.stat",
+	"getcwd":      "file.stat",
+	"rmdir":       "file.delete",
+	"recvmsg":     "net.recv",
+	"shutdown":    "net.close",
+	"socketpair":  "net.socket",
 	"setsockopt":  "net.socket",
 	"getsockname": "net.socket",
 	"getsockopt":  "net.socket",
 }
 
 type Event struct {
-	Seq int
-	PID string
-	TS string
+	Seq     int
+	PID     string
+	TS      string
 	Syscall string
-	Raw string
-	Kind string
-	Target string
-	Failed bool
+	Raw     string
+	Kind    string
+	Target  string
+	Failed  bool
 	Partial bool
 }
 
@@ -81,9 +81,9 @@ func Parse(path string) ([]Event, int, error) {
 			TS:      fields[1],
 			Syscall: name,
 			Raw:     line,
-			Kind:	 kind,
-			Target: target,
-			Failed: failed(line),
+			Kind:    kind,
+			Target:  target,
+			Failed:  failed(line),
 			Partial: partial(line),
 		})
 	}
@@ -109,13 +109,13 @@ func classify(syscall, raw string) string {
 	return "other"
 }
 
-func extractTarget (kind, raw string) string {
+func extractTarget(kind, raw string) string {
 	parts := strings.Split(raw, "\"")
 
 	if len(parts) < 2 {
 		return ""
 	}
-	
+
 	return parts[1]
 }
 

@@ -1,0 +1,4 @@
+# The repo is edited from both WSL and Windows. Without this, files saved from
+# Windows come back as CRLF and gofmt rewrites every line, which buries a real
+# change in a whole-file diff.
+* text=auto eol=lf
