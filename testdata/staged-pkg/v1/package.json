@@ -1,0 +1,10 @@
+{
+  "name": "staged-pkg",
+  "version": "1.0.0",
+  "description": "SYNTHETIC test fixture, v1 baseline. Harmless.",
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  }
+}

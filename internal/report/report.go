@@ -23,6 +23,7 @@ type Analysis struct {
 	Verdict    string              `json:"verdict"`
 	Events     int                 `json:"events"`
 	Skipped    int                 `json:"skipped"`
+	Kinds      map[string]int      `json:"kinds"`
 	Findings   []signature.Finding `json:"findings"`
 	Behaviours []Behaviour         `json:"behaviours"`
 }
@@ -36,9 +37,24 @@ type Behaviour struct {
 // otherwise show up as spurious differences when diffing two versions.
 // npm writes a debug log whose filename contains a timestamp.
 var volatilePrefixes = []string{
-	"/root/.npm/_logs/",
-	"/sys/", // kernel interfaces probed conditionally by the runtime
+	"/root/.npm/_logs", // no trailing slash: the directory itself varies too
+	"/sys/",            // kernel interfaces probed conditionally by the runtime
 	"/proc/",
+
+	// npm checks for its own updates at most once a day, so this write
+	// appears or not depending on when the previous run happened.
+	"/root/.npm/_update-notifier-last-checked",
+}
+
+// harnessReadPrefixes are paths whose reads belong to the tooling rather than
+// to the package: npm loading its own source. Measured on express they were
+// 708 of 727 behaviours — 97% of the set — and every module npm happens to
+// load lazily is a potential spurious difference between two versions.
+//
+// Reads only. A package WRITING into npm's own installation is persistence,
+// a real behaviour, and must still be reported.
+var harnessReadPrefixes = []string{
+	"/usr/local/lib/node_modules/npm/",
 }
 
 // Failed syscalls are excluded: an attempt is not an action, and counting
@@ -60,17 +76,16 @@ func Behaviours(events []collect.Event) []Behaviour {
 		if e.Target == "" {
 			continue
 		}
-		if isVolatile(e.Target) {
+		if hasAnyPrefix(e.Target, volatilePrefixes) {
+			continue
+		}
+		if e.Kind == "file.read" && hasAnyPrefix(e.Target, harnessReadPrefixes) {
 			continue
 		}
 		if strings.HasSuffix(e.Target, "/node_modules") {
 			continue
 		}
-		if e.Target == "/work/package.json" || e.Target == "/work/package-lock.json" {
-			continue
-		}
-		if strings.HasSuffix(e.Target, "package-lock.json") ||
-			e.Target == "/work/package.json" {
+		if e.Target == "/work/package.json" || strings.HasSuffix(e.Target, "package-lock.json") {
 			continue
 		}
 
@@ -82,25 +97,39 @@ func Behaviours(events []collect.Event) []Behaviour {
 		out = append(out, b)
 	}
 
-	// Map iteration order is random in Go, so the result must be sorted to be
-	// stable — otherwise two identical runs would produce different reports.
-	slices.SortFunc(out, func(a, b Behaviour) int {
+	sortBehaviours(out)
+	return out
+}
+
+// Map iteration order is random in Go, so any behaviour set must be sorted
+// before it leaves this package — otherwise two identical runs produce
+// different reports and the diff is meaningless.
+func sortBehaviours(bs []Behaviour) {
+	slices.SortFunc(bs, func(a, b Behaviour) int {
 		if a.Kind != b.Kind {
 			return strings.Compare(a.Kind, b.Kind)
 		}
 		return strings.Compare(a.Target, b.Target)
 	})
-
-	return out
 }
 
-func isVolatile(target string) bool {
-	for _, p := range volatilePrefixes {
+func hasAnyPrefix(target string, prefixes []string) bool {
+	for _, p := range prefixes {
 		if strings.HasPrefix(target, p) {
 			return true
 		}
 	}
 	return false
+}
+
+// Kinds counts the events per behaviour kind. Unlike Behaviours it counts
+// everything, failures included: it describes the trace, not the package.
+func Kinds(events []collect.Event) map[string]int {
+	counts := map[string]int{}
+	for _, e := range events {
+		counts[e.Kind]++
+	}
+	return counts
 }
 
 // Verdict returns the overall assessment.
@@ -120,7 +149,15 @@ func Verdict(findings []signature.Finding) string {
 }
 
 func Write(path string, r Report) error {
-	data, err := json.MarshalIndent(r, "", "  ")
+	return writeJSON(path, r)
+}
+
+func WriteDiff(path string, d DiffReport) error {
+	return writeJSON(path, d)
+}
+
+func writeJSON(path string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
