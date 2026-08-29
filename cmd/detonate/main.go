@@ -139,6 +139,7 @@ func main() {
 			Events:    len(events),
 			Skipped:   skipped,
 			Findings:  findings,
+			Behaviours: report.Behaviours(events),
 		},
 	}
 	reportPath := filepath.Join(outPath, "report.json")
