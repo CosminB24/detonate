@@ -14,7 +14,7 @@
 ## The problem
 
 `npm install` executes arbitrary code on your machine. That has always been true,
-and it is how most supply chain attacks land — a compromised maintainer publishes
+and it is how most supply chain attacks land, a compromised maintainer publishes
 a new version, an install hook fires, and credentials leave your laptop or your
 CI runner before anyone notices.
 
@@ -76,7 +76,7 @@ $ detonate diff npm some-package@1.2.3 some-package@1.2.4
 ```
 
 Each version is detonated more than once, and only the behaviours every run
-agreed on are compared — anything that varies between runs of the same version
+agreed on are compared, anything that varies between runs of the same version
 is noise, and would otherwise be reported as a change between versions.
 
 Static version diffing exists. Dynamic behavioural diffing, as far as we can
@@ -86,7 +86,7 @@ tell, does not.
 
 Early, and honest about it. The output above is real, but the coverage behind it
 is narrow: install scripts only, one detonation per run, exported functions never
-invoked. That is why there is no `benign` verdict — with this much coverage, no
+invoked. That is why there is no `benign` verdict, with this much coverage, no
 findings is not evidence of safety, so the tool says `inconclusive` instead.
 
 ## Running it
@@ -100,13 +100,13 @@ go run ./cmd/detonate diff npm ./testdata/staged-pkg/v1 ./testdata/staged-pkg/v2
 ```
 
 Writes a trace and a JSON report to `out/`. The package is downloaded with the
-network on and no code running, then executed with the network off — so the only
+network on and no code running, then executed with the network off, so the only
 thing that ever touches the internet is the download.
 
 > **A note on isolation.** Tracing requires `SYS_PTRACE` and a relaxed seccomp
 > profile, which weakens container isolation. Treat the current sandbox as a
 > research tool, not a containment boundary. Every test fixture in this repo is
-> hand-written and harmless — no real malware samples, ever.
+> hand-written and harmless, no real malware samples, ever.
 
 ## License
 
