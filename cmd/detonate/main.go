@@ -287,29 +287,6 @@ func analyse(ecosystem, target, outDir string) (report.Analysis, error) {
 	fmt.Printf("%-12s %d\n", "events:", len(events))
 	fmt.Printf("%-12s %d\n", "skipped:", skipped)
 
-	for _, e := range events {
-		if strings.Contains(e.Raw, "resumed") {
-			fmt.Printf("RESUMED syscall=%q kind=%s result=%q pid=%s\n",
-				e.Syscall, e.Kind, e.Result, e.PID)
-		}
-	}
-
-	tree := collect.ProcessTree(events)
-	fmt.Println()
-	for child, parent := range tree {
-		fmt.Printf("  %s → %s\n", parent, child)
-	}
-
-	roots := collect.ScriptRoots(events)
-	fmt.Printf("\nSCRIPT ROOTS: %v\n", roots)
-
-	for _, e := range events {
-		if e.Kind == "process.exec" && !e.Failed &&
-			(strings.HasSuffix(e.Target, "/sh") || strings.HasSuffix(e.Target, "/bash")) {
-			fmt.Printf("SHELL pid=%s phase=%s target=%s parent_phase=%s\n", e.PID, e.Phase, e.Target, e.ParentPhase)
-		}
-	}
-
 	findings := signature.Match(events)
 
 	return report.Analysis{
