@@ -73,6 +73,9 @@ func runAnalyse(ecosystem string, args []string) error {
 	for kind, n := range analysis.Kinds {
 		fmt.Printf("%-16s %d\n", kind, n)
 	}
+
+	printPackageBehaviours(analysis.Behaviours)
+
 	fmt.Println()
 	fmt.Printf("%-12s %s\n", "verdict:", analysis.Verdict)
 	fmt.Println()
@@ -340,4 +343,26 @@ func outRoot() (string, error) {
 	}
 	outDir := filepath.Join(wd, "out")
 	return outDir, os.MkdirAll(outDir, 0o755)
+}
+
+func printPackageBehaviours(bs []report.Behaviour) {
+	var pkg, other int
+	fmt.Println()
+	fmt.Println("BEHAVIOURS (install script)")
+
+	for _, b := range bs {
+		if b.Phase != collect.PhaseInstallScript {
+			other++
+			continue
+		}
+		pkg++
+		fmt.Printf("  %-16s %s\n", b.Kind, b.Target)
+	}
+
+	if pkg == 0 {
+		fmt.Println("  none — no package-controlled code ran")
+	}
+	if other > 0 {
+		fmt.Printf("  (%d more from npm and runtime setup — see report.json)\n", other)
+	}
 }

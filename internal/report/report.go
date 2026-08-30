@@ -31,6 +31,7 @@ type Analysis struct {
 type Behaviour struct {
 	Kind   string `json:"kind"`
 	Target string `json:"target"`
+	Phase  string `json:"phase"`
 }
 
 // volatilePrefixes are paths that differ between identical runs and would
@@ -89,7 +90,7 @@ func Behaviours(events []collect.Event) []Behaviour {
 			continue
 		}
 
-		seen[Behaviour{Kind: e.Kind, Target: e.Target}] = true
+		seen[Behaviour{Kind: e.Kind, Target: e.Target, Phase: e.Phase}] = true
 	}
 
 	out := make([]Behaviour, 0, len(seen))
@@ -106,6 +107,9 @@ func Behaviours(events []collect.Event) []Behaviour {
 // different reports and the diff is meaningless.
 func sortBehaviours(bs []Behaviour) {
 	slices.SortFunc(bs, func(a, b Behaviour) int {
+		if a.Phase != b.Phase {
+			return strings.Compare(a.Phase, b.Phase)
+		}
 		if a.Kind != b.Kind {
 			return strings.Compare(a.Kind, b.Kind)
 		}
