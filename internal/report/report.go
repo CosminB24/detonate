@@ -45,6 +45,7 @@ var volatilePrefixes = []string{
 	// npm checks for its own updates at most once a day, so this write
 	// appears or not depending on when the previous run happened.
 	"/root/.npm/_update-notifier-last-checked",
+	"/dev/null",
 }
 
 // harnessReadPrefixes are paths whose reads belong to the tooling rather than
