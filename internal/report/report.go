@@ -56,6 +56,10 @@ var volatilePrefixes = []string{
 // a real behaviour, and must still be reported.
 var harnessReadPrefixes = []string{
 	"/usr/local/lib/node_modules/npm/",
+	"/lib/",
+	"/usr/lib/",
+	"/etc/ssl/",
+	"/usr/local/bin/node",
 }
 
 // Failed syscalls are excluded: an attempt is not an action, and counting
