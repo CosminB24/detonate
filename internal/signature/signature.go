@@ -7,11 +7,12 @@ import (
 )
 
 type Rule struct {
-	ID       string   // stable identifier, e.g. CRED_FILE_READ
-	Title    string   // human-readable summary
-	Severity string   // high / medium / low
-	Kind     string   // event kind the rule looks for
-	Contains []string // rule fires if Target contains ANY of these
+	ID          string   // stable identifier, e.g. CRED_FILE_READ
+	Title       string   // human-readable summary
+	Severity    string   // high / medium / low
+	Kind        string   // event kind the rule looks for
+	Contains    []string // rule fires if Target contains ANY of these
+	ParentPhase string   // if set, the rule only fires when Event.ParentPhase matches
 }
 
 type Finding struct {
@@ -38,11 +39,12 @@ var rules = []Rule{
 		Contains: []string{".bashrc", ".zshrc", ".profile"},
 	},
 	{
-		ID:       "SHELL_SPAWN",
-		Title:    "Install script spawned a shell",
-		Severity: "medium",
-		Kind:     "process.exec",
-		Contains: []string{"/sh", "/bash"},
+		ID:          "SHELL_SPAWN",
+		Title:       "Install script spawned a shell",
+		Severity:    "medium",
+		Kind:        "process.exec",
+		Contains:    []string{"/sh", "/bash"},
+		ParentPhase: "install_script",
 	},
 }
 
@@ -61,6 +63,9 @@ func Match(events []collect.Event) []Finding {
 			}
 
 			if e.Kind != rule.Kind {
+				continue
+			}
+			if rule.ParentPhase != "" && e.ParentPhase != rule.ParentPhase {
 				continue
 			}
 

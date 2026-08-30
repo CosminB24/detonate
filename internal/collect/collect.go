@@ -35,17 +35,26 @@ var syscallKinds = map[string]string{
 }
 
 type Event struct {
-	Seq     int
-	PID     string
-	TS      string
-	Syscall string
-	Raw     string
-	Kind    string
-	Target  string
-	Failed  bool
-	Partial bool
-	Result string
+	Seq         int
+	PID         string
+	TS          string
+	Syscall     string
+	Raw         string
+	Kind        string
+	Target      string
+	Failed      bool
+	Partial     bool
+	Result      string
+	Phase       string
+	ParentPhase string
 }
+
+const (
+	PhaseSetup         = "setup"          // npm doing its own work
+	PhaseInstallScript = "install_script" // code the package controls
+)
+
+const maxTreeDepth = 64
 
 func Parse(path string) ([]Event, int, error) {
 	file, err := os.Open(path)
@@ -67,10 +76,22 @@ func Parse(path string) ([]Event, int, error) {
 			continue
 		}
 
-		name, _, found := strings.Cut(fields[2], "(")
-		if !found {
-			skipped++
-			continue
+		var name string
+		if fields[2] == "<..." {
+			// "<... vfork resumed>) = 22" — the name is the next field.
+			// Arguments were on the "<unfinished>" line, but the result is here.
+			if len(fields) < 4 {
+				skipped++
+				continue
+			}
+			name = fields[3]
+		} else {
+			n, _, found := strings.Cut(fields[2], "(")
+			if !found {
+				skipped++
+				continue
+			}
+			name = n
 		}
 
 		res := result(line)
@@ -91,7 +112,7 @@ func Parse(path string) ([]Event, int, error) {
 		})
 	}
 
-	return events, skipped, scanner.Err()
+	return MarkPhases(events), skipped, scanner.Err()
 }
 
 func classify(syscall, raw string) string {
@@ -135,9 +156,9 @@ func result(raw string) string {
 	if i < 0 {
 		return ""
 	}
- 
+
 	rest := raw[i+2:]
- 
+
 	// Cut at the first space: "-1 ENOENT (...)" → "-1"
 	if j := strings.IndexByte(rest, ' '); j >= 0 {
 		rest = rest[:j]
@@ -146,6 +167,84 @@ func result(raw string) string {
 	if j := strings.IndexByte(rest, '<'); j >= 0 {
 		rest = rest[:j]
 	}
- 
+
 	return rest
+}
+
+func ProcessTree(events []Event) map[string]string {
+	tree := map[string]string{}
+
+	for _, e := range events {
+		if e.Kind != "process.create" {
+			continue
+		}
+		if e.Failed {
+			continue
+		}
+		if e.Partial {
+			continue
+		}
+		if e.Result == "0" {
+			continue
+		}
+		if e.Result == "" {
+			continue
+		}
+
+		tree[e.Result] = e.PID
+	}
+
+	return tree
+}
+
+func ScriptRoots(events []Event) map[string]bool {
+	roots := map[string]bool{}
+
+	for _, e := range events {
+		if e.Kind != "process.exec" {
+			continue
+		}
+		if !strings.HasSuffix(e.Target, "/sh") && !strings.HasSuffix(e.Target, "/bash") {
+			continue
+		}
+		if e.Partial {
+			continue
+		}
+		if e.Failed {
+			continue
+		}
+
+		roots[e.PID] = true
+	}
+
+	return roots
+}
+
+func MarkPhases(events []Event) []Event {
+	tree := ProcessTree(events)
+	roots := ScriptRoots(events)
+
+	for i := range events {
+		parent := tree[events[i].PID]
+		events[i].Phase = phaseOf(events[i].PID, tree, roots)
+		events[i].ParentPhase = phaseOf(parent, tree, roots)
+	}
+
+	return events
+}
+
+func phaseOf(pid string, tree map[string]string, roots map[string]bool) string {
+	for depth := 0; depth < maxTreeDepth; depth++ {
+		if roots[pid] {
+			return PhaseInstallScript
+		}
+
+		parent, ok := tree[pid]
+		if !ok {
+			return PhaseSetup // no parent recorded: top of the tree
+		}
+		pid = parent
+	}
+
+	return PhaseSetup // depth limit hit; treat as setup rather than loop
 }
