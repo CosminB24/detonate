@@ -52,6 +52,10 @@ func runAnalyse(ecosystem string, args []string) error {
 		return errUsage
 	}
 
+	if err := runner.EnsureImage(); err != nil {
+		return err
+	}
+
 	target, err := resolve(args[0])
 	if err != nil {
 		return err
@@ -115,6 +119,9 @@ func runDiff(args []string) error {
 	ecosystem := fs.Arg(0)
 	if ecosystem != "npm" {
 		return errors.New("only npm is supported")
+	}
+	if err := runner.EnsureImage(); err != nil {
+		return err
 	}
 	fromTarget, err := resolve(fs.Arg(1))
 	if err != nil {

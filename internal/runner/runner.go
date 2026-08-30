@@ -3,6 +3,7 @@ package runner
 import (
 	"os"
 	"os/exec"
+	"fmt"
 )
 
 const image = "detonate-spike"
@@ -56,4 +57,16 @@ func Clean(outDir string) error {
 		image,
 		"rm", "-rf", "/out/work")
 	return cmd.Run()
+}
+
+func EnsureImage() error {
+	if err := exec.Command("docker", "image", "inspect", image).Run(); err == nil {
+		return nil
+	}
+	return fmt.Errorf(`sandbox image %q not found
+
+Build it with:
+  docker build -t %s https://github.com/CosminB24/detonate.git#:spike
+
+This is a one-off — the image is cached afterwards.`, image, image)
 }
